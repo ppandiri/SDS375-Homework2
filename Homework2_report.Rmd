@@ -6,7 +6,7 @@ output: html_document
 
 ## Name
 
-Please enter your name here.
+Prajay Pandiri
 
 ### Setup
 
@@ -15,7 +15,9 @@ Read in the data with `read_csv()` and store the data as an R object named `data
 
 ```{r}
 ## Load the data and any necessary packages here.
-
+library(dplyr)
+library(tidyverse)
+dataset = read.csv('maacs.csv.gz')
 ```
 
 ## Part 1
@@ -32,7 +34,11 @@ NOTE: For this part, do not use any plots.
 
 ```{r}
 ## Write your function here
-
+check_relation_fev1_age <- function(dataset) {
+  fev1_age_corr = cor(dataset$fev1, dataset$age, use = 'complete.obs')
+  return(fev1_age_corr > 0)
+}
+check_relation_fev1_age(dataset)
 ```
 
 
@@ -44,13 +50,16 @@ How much does FEV1 change for a 1-year increase in the child's age?
 
 ```{r}
 ## Add your code here
-
+lm1 <- lm(fev1 ~ age, data = dataset)
+one_yr <- coef(lm1)["age"]
+one_yr
 ```
 
+FEV1 changes .1712 units per a 1-year increase in the child's age.
 
 Write your data analysis statement interpreting the regression model here:
 
-
+Based on the regression model and the observed correlation value, we can estimate that the mean FEV1 level of older children is higher than the mean FEV1 level of younger children.
 
 ## Part 3
 
@@ -62,19 +71,14 @@ NOTE:
 
 * Do not use the code you write in Part 1 as a supporting premise
 
-```{r}
-## Add your code here
-
-```
-
 
 Write the three supporting premise statements here:
 
-1. 
+1. The boxplot of FEV1 in the older group has a higher median that of the younger group AND both box plots appear relatively symmetric with no extreme outleirs when dividing the older and younger group by the median age.
 
-2. 
+2. The histogram of the FEV1 in the older group has a mode to the right that is higher than that of the younger group and both histograms are approximately bell shaped when dividing the older and younger group by the median age.
 
-3. 
+3. The mean FEV1 value in the older group is greater than the mean FEV1 value in the younger group when dividing the children by the median age.
 
 
 ## Part 4
@@ -90,23 +94,88 @@ For statements involving plots, instead of returning `TRUE` or `FALSE`, you func
 
 ```{r}
 ## Function for supporting premise statement 1
+plot_boxplot_premise1 <- function(dataset) {
+  # split by median age
+  med_age <- median(dataset$age, na.rm = TRUE)
+  dataset$AgeGroup <- ifelse(dataset$age > med_age, "Older", "Younger")
 
+  par(mfrow = c(1,2))
+
+  # actual boxplot
+  boxplot(fev1 ~ AgeGroup, data = dataset,
+          main = "Actual", col = c("lightblue","lightgreen"))
+
+  # hypothetical: Older has higher median, symmetric, no outliers
+  fev_y <- pmin(pmax(rnorm(100, mean = 2.2, sd = 0.3), 1.5), 3) # removing outliers
+  fev_o <- pmin(pmax(rnorm(100, mean = 3.0, sd = 0.3), 2.2), 3.8) # removing outliers
+  hyp <- data.frame(fev1 = c(fev_y, fev_o),
+                    AgeGroup = rep(c("Younger","Older"), each = 100))
+  boxplot(fev1 ~ AgeGroup, data = hyp,
+          main = "Hypothetical (Premise True)",
+          col = c("lightblue","lightgreen"))
+}
+plot_boxplot_premise1(dataset)
 ```
+
+Based on this it seems that the actual boxplot is relatively similar to the hypothetical one. The data shows the Older group has a higher median and the distributions for Older and Younger are relatively similar; however, there is an extreme outlier and the boxplots for older and younger are slightly skewed to the right.
 
 
 ```{r}
 ## Function for supporting premise statement 2
+plot_hist_premise2 <- function(dataset) {
+  med_age <- median(dataset$age, na.rm = TRUE)
+  dataset$AgeGroup <- ifelse(dataset$age > med_age, "Older", "Younger")
 
+  par(mfrow = c(2,2))
+
+  hist_younger <- hist(dataset$fev1[dataset$AgeGroup == "Younger"],
+              main = "Actual - Younger", xlab = "FEV1", col = "green", xlim = c(0,5))
+  mode_younger <- hist_younger$mids[which.max(hist_younger$counts)]
+  abline(v = mode_younger, col = "red", lwd = 2)
+
+  hist_older <- hist(dataset$fev1[dataset$AgeGroup == "Older"],
+              main = "Actual - Older", xlab = "FEV1", col = "blue", xlim = c(0,5))
+  mode_older <- hist_older$mids[which.max(hist_older$counts)]
+  abline(v = mode_older, col = "red", lwd = 2)
+
+  fev_younger <- rnorm(1000, mean = 2.2, sd = 0.4)
+  hist_younger_hyp <- hist(fev_younger, main = "Hypothetical - Younger",
+                  xlab = "FEV1", col = "green", xlim = c(0,5))
+  mode_younger_hyp <- hist_younger_hyp$mids[which.max(hist_younger_hyp$counts)]
+  abline(v = mode_younger_hyp, col = "red", lwd = 2)
+
+  fev_older <- rnorm(1000, mean = 3.0, sd = 0.4)
+  hist_older_hyp <- hist(fev_older, main = "Hypothetical - Older",
+                  xlab = "FEV1", col = "blue", xlim = c(0,5))
+  mode_older_hyp <- hist_older_hyp$mids[which.max(hist_older_hyp$counts)]
+  abline(v = mode_older_hyp, col = "red", lwd = 2)
+}
+plot_hist_premise2(dataset)
 ```
 
+The mode of the older histogram is better than the younger histogram, but looking at the hypothetical histogram's you can see that the histogram's aren't as bell shaped as they could be as the younger one is a little skewed right.
 
 ```{r}
-## Function for supporting premise statement 3
+premise3_ttest <- function(dataset) {
+  med_age <- median(dataset$age, na.rm = TRUE)
+  dataset$AgeGroup <- ifelse(dataset$age > med_age, "Older", "Younger")
 
+  t_res <- t.test(fev1 ~ AgeGroup, data = dataset, var.equal = TRUE)
+
+  mean_younger <- mean(dataset$fev1[dataset$AgeGroup == "Younger"], na.rm = TRUE)
+  mean_older   <- mean(dataset$fev1[dataset$AgeGroup == "Older"], na.rm = TRUE)
+  if (mean_older > mean_younger && t_res$p.value < 0.05) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
+premise3_ttest(dataset)
 ```
 
-Execute each of your function and show that the produce the expected output.
+Because the difference in means is statistically significant (less than 0.05 in p value) we can say that the difference in means is statistically significant.
 
+Execute each of your function and show that the produce the expected output.
 
 
 
@@ -117,5 +186,7 @@ Describe one alternative to the primary statement "FEV1 values in children are h
 Create a fault tree for the alternative outcome describing how the alternative outcome could be realized in the data even if the primary statement were true.
 
 Your fault tree should be created as a separate image and does not need to be created in R. Upload the image of the fault tree to Canvas.
+
+Alternative Outcome: There is no difference in the average FEV1 value between younger children and older children.
 
 
